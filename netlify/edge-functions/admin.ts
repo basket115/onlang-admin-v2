@@ -383,6 +383,88 @@ export default async (request: Request, _context: Context) => {
       return jsonOut({ success: true, data: { postId: postId } });
     }
 
+    // ══════════════ Schritt 5b: Kategorien ══════════════
+    // Datenquelle: Modul 05 (Studio_Categories, mandantenfaehig).
+    // kundenId kommt IMMER aus der Session, nie aus dem Browser.
+
+    // Kategorien des Session-Kunden lesen (GET).
+    if (action === "loadCategories") {
+      const result = await studioGet({ action: "getCategories", kundenId: kundenId });
+      if (!result || result.success !== true) {
+        const msg =
+          result && result.message ? result.message : "Kategorien konnten nicht geladen werden.";
+        return jsonOut({ success: false, error: { code: "LOAD_FAILED", message: msg } });
+      }
+      return jsonOut({
+        success: true,
+        data: { categories: Array.isArray(result.categories) ? result.categories : [] },
+      });
+    }
+
+    // Neue Kategorie erstellen (POST) – kundenId serverseitig.
+    if (action === "createCategory") {
+      const payload: Record<string, string> = {
+        action: "createCategory",
+        kundenId: kundenId, // serverseitig, nicht aus Browser-Angabe
+        name: String(body.name || ""),
+        beschreibung: String(body.beschreibung || ""),
+        sortierung: String(body.sortierung || ""),
+      };
+      const result = await studioPost(payload);
+      if (!result || result.success !== true) {
+        const code =
+          result && result.error ? String(result.error) : "CREATE_FAILED";
+        const msg =
+          result && result.message ? result.message : "Kategorie konnte nicht erstellt werden.";
+        return jsonOut({ success: false, error: { code: code, message: msg } });
+      }
+      return jsonOut({ success: true, data: { kategorieId: result.kategorieId } });
+    }
+
+    // Kategorie aktualisieren (POST) – kundenId serverseitig.
+    // Modul 05 prueft zusaetzlich Kategorie_ID + Kunden_ID.
+    if (action === "updateCategory") {
+      const payload: Record<string, string> = {
+        action: "updateCategory",
+        kundenId: kundenId, // serverseitig
+        categoryId: String(body.categoryId || ""),
+      };
+      // Nur uebergebene Felder weiterreichen (Modul 05 aktualisiert selektiv).
+      if (body.name !== undefined) payload.name = String(body.name);
+      if (body.beschreibung !== undefined) payload.beschreibung = String(body.beschreibung);
+      if (body.sortierung !== undefined) payload.sortierung = String(body.sortierung);
+      if (body.aktiv !== undefined) payload.aktiv = String(body.aktiv);
+
+      const result = await studioPost(payload);
+      if (!result || result.success !== true) {
+        const code =
+          result && result.error ? String(result.error) : "UPDATE_FAILED";
+        const msg =
+          result && result.message ? result.message : "Kategorie konnte nicht gespeichert werden.";
+        return jsonOut({ success: false, error: { code: code, message: msg } });
+      }
+      return jsonOut({ success: true, data: { kategorieId: result.kategorieId } });
+    }
+
+    // Kategorie loeschen (POST) – kundenId serverseitig.
+    // Modul 05 prueft Kategorie_ID + Kunden_ID und blockt bei CATEGORY_IN_USE.
+    if (action === "deleteCategory") {
+      const payload: Record<string, string> = {
+        action: "deleteCategory",
+        kundenId: kundenId, // serverseitig
+        categoryId: String(body.categoryId || ""),
+      };
+      const result = await studioPost(payload);
+      if (!result || result.success !== true) {
+        const code =
+          result && result.error ? String(result.error) : "DELETE_FAILED";
+        const msg =
+          result && result.message ? result.message : "Kategorie konnte nicht gelöscht werden.";
+        return jsonOut({ success: false, error: { code: code, message: msg } });
+      }
+      return jsonOut({ success: true, data: { kategorieId: result.kategorieId } });
+    }
+
     return jsonOut({
       success: false,
       error: { code: "UNKNOWN_ACTION", message: "Unbekannte Admin-Aktion." },

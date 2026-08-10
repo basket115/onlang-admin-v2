@@ -245,6 +245,7 @@
     <div class="tab active" id="tab_start" onclick="showTab('start')">Start</div>
     <div class="tab" id="tab_branding" onclick="showTab('branding')">Verein &amp; Branding</div>
     <div class="tab" id="tab_posts" onclick="showTab('posts')">Beiträge</div>
+    <div class="tab" id="tab_categories" onclick="showTab('categories')">Kategorien</div>
     <div class="tab" id="tab_password" onclick="showTab('password')">Passwort</div>
   </div>
 
@@ -362,6 +363,52 @@
     </div>
   </div>
 
+  <!-- Kategorien (Schritt 5b) -->
+  <div class="panel" id="view_categories" style="display:none">
+    <h2>Kategorien</h2>
+    <p class="hint">Verwalte die Kategorien deines eigenen Vereins. Sie stammen aus Modul 05 (Studio).</p>
+
+    <!-- Liste -->
+    <div id="catListArea">
+      <div class="post-toolbar">
+        <button class="btn-primary" style="margin-top:0" onclick="openNewCategory()">+ Neue Kategorie</button>
+        <button class="btn-secondary" onclick="loadCategories()">Aktualisieren</button>
+      </div>
+      <div id="catLoading">Lade Kategorien …</div>
+      <div id="catList"></div>
+    </div>
+
+    <!-- Editor (neu / bearbeiten) -->
+    <div id="catEditor" style="display:none">
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="c_name" placeholder="z. B. Jugend" />
+      </div>
+      <div class="field">
+        <label>Beschreibung (optional)</label>
+        <input type="text" id="c_beschreibung" placeholder="Kurze Beschreibung" />
+      </div>
+      <div class="color-grid">
+        <div class="field">
+          <label>Sortierung</label>
+          <input type="text" id="c_sortierung" placeholder="0" />
+        </div>
+        <div class="field">
+          <label>Aktiv</label>
+          <select id="c_aktiv">
+            <option value="JA">Ja</option>
+            <option value="NEIN">Nein</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-primary" id="btnSaveCat" style="margin-top:0" onclick="saveCategory()">Kategorie speichern</button>
+        <button class="btn-secondary" onclick="cancelCatEditor()">Abbrechen</button>
+      </div>
+      <div class="msg" id="catMsg"></div>
+    </div>
+  </div>
+
   <!-- Passwort (Schritt 4) -->
   <div class="panel" id="view_password" style="display:none">
     <h2>Passwort ändern</h2>
@@ -396,7 +443,7 @@
   </div>
 </div>
 
-<footer>ONLANG Admin · V1.1 · Schritt 4</footer>
+<footer>ONLANG Admin · V1.1 · Schritt 5</footer>
 
 <script>
 // ──────────────────────────────────────────────────────────────
@@ -523,14 +570,17 @@ function showTab(name) {
   document.getElementById('tab_start').classList.toggle('active', name === 'start');
   document.getElementById('tab_branding').classList.toggle('active', name === 'branding');
   document.getElementById('tab_posts').classList.toggle('active', name === 'posts');
+  document.getElementById('tab_categories').classList.toggle('active', name === 'categories');
   document.getElementById('tab_password').classList.toggle('active', name === 'password');
   document.getElementById('view_start').style.display = (name === 'start') ? 'block' : 'none';
   document.getElementById('view_branding').style.display = (name === 'branding') ? 'block' : 'none';
   document.getElementById('view_posts').style.display = (name === 'posts') ? 'block' : 'none';
+  document.getElementById('view_categories').style.display = (name === 'categories') ? 'block' : 'none';
   document.getElementById('view_password').style.display = (name === 'password') ? 'block' : 'none';
 
   if (name === 'branding') loadBranding();
   if (name === 'posts') { showPostsList(); loadPosts(); }
+  if (name === 'categories') { showCatList(); loadCategories(); }
   if (name === 'password') resetPasswordForm();
 }
 
@@ -1031,6 +1081,231 @@ async function changePassword() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Passwort ändern';
+  }
+}
+
+// ══════════════ Schritt 5b: Kategorien ══════════════
+
+var editingCategoryId = null; // null = neu, sonst Bearbeitung
+
+function showCatList() {
+  document.getElementById('catListArea').style.display = 'block';
+  document.getElementById('catEditor').style.display = 'none';
+}
+
+// Kategorien laden – nur eigener Mandant (Proxy garantiert das).
+async function loadCategories() {
+  var loading = document.getElementById('catLoading');
+  var list = document.getElementById('catList');
+  loading.style.display = 'block';
+  loading.textContent = 'Lade Kategorien …';
+  list.innerHTML = '';
+
+  try {
+    var res = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'loadCategories', token: sessionToken })
+    });
+    var data = await res.json();
+
+    if (!data || data.success !== true) {
+      if (data && data.error && data.error.code === 'SESSION_INVALID') { backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.'); return; }
+      loading.textContent = 'Kategorien konnten nicht geladen werden.';
+      return;
+    }
+
+    loading.style.display = 'none';
+    var cats = data.data.categories || [];
+    if (!cats.length) {
+      list.innerHTML = '<div class="empty-note">Noch keine Kategorien. Lege deine erste Kategorie an.</div>';
+      return;
+    }
+
+    list.innerHTML = cats.map(function(c) {
+      var aktiv = String(c.aktiv || '').toUpperCase() === 'JA';
+      var aktivPill = aktiv
+        ? '<span class="status-pill status-PUBLISHED">Aktiv</span>'
+        : '<span class="status-pill status-ARCHIVED">Inaktiv</span>';
+      var besch = c.beschreibung ? esc(c.beschreibung) : '';
+      var sort = (c.sortierung !== undefined && c.sortierung !== '') ? esc(String(c.sortierung)) : '0';
+
+      return '' +
+        '<div class="post-item">' +
+          '<div class="post-top">' +
+            '<div>' +
+              '<div class="post-title">' + esc(c.name || '(ohne Name)') + '</div>' +
+              '<div class="post-meta">' +
+                aktivPill +
+                '<span>Sortierung: ' + sort + '</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          (besch ? '<div class="post-teaser">' + besch + '</div>' : '') +
+          '<div class="post-actions">' +
+            '<button class="act-edit" onclick="openEditCategory(\'' + esc(c.kategorieId) + '\')">Bearbeiten</button>' +
+            '<button class="act-delete" onclick="deleteCategory(\'' + esc(c.kategorieId) + '\')">Löschen</button>' +
+          '</div>' +
+        '</div>';
+    }).join('');
+
+  } catch (e) {
+    loading.textContent = 'Verbindungsfehler beim Laden.';
+  }
+}
+
+// Cache der aktuell geladenen Kategorien fuer die Bearbeitung.
+var _catCache = [];
+
+// Neue Kategorie – Editor leer.
+function openNewCategory() {
+  editingCategoryId = null;
+  document.getElementById('c_name').value = '';
+  document.getElementById('c_beschreibung').value = '';
+  document.getElementById('c_sortierung').value = '0';
+  document.getElementById('c_aktiv').value = 'JA';
+  document.getElementById('btnSaveCat').textContent = 'Kategorie speichern';
+  document.getElementById('catMsg').textContent = '';
+  document.getElementById('catListArea').style.display = 'none';
+  document.getElementById('catEditor').style.display = 'block';
+}
+
+// Bearbeiten – Werte aus der geladenen Liste in den Editor.
+async function openEditCategory(kategorieId) {
+  // Frisch laden, um den aktuellen Stand zu haben.
+  try {
+    var res = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'loadCategories', token: sessionToken })
+    });
+    var data = await res.json();
+    if (!data || data.success !== true) {
+      if (data && data.error && data.error.code === 'SESSION_INVALID') { backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.'); return; }
+      alert('Kategorie konnte nicht geladen werden.');
+      return;
+    }
+    _catCache = data.data.categories || [];
+  } catch (e) {
+    alert('Verbindungsfehler beim Laden.');
+    return;
+  }
+
+  var cat = null;
+  for (var i = 0; i < _catCache.length; i++) {
+    if (_catCache[i].kategorieId === kategorieId) { cat = _catCache[i]; break; }
+  }
+  if (!cat) { alert('Kategorie nicht gefunden.'); loadCategories(); return; }
+
+  editingCategoryId = cat.kategorieId;
+  document.getElementById('c_name').value = cat.name || '';
+  document.getElementById('c_beschreibung').value = cat.beschreibung || '';
+  document.getElementById('c_sortierung').value = (cat.sortierung !== undefined && cat.sortierung !== '') ? cat.sortierung : '0';
+  document.getElementById('c_aktiv').value = (String(cat.aktiv || '').toUpperCase() === 'JA') ? 'JA' : 'NEIN';
+
+  document.getElementById('btnSaveCat').textContent = 'Änderungen speichern';
+  document.getElementById('catMsg').textContent = '';
+  document.getElementById('catListArea').style.display = 'none';
+  document.getElementById('catEditor').style.display = 'block';
+}
+
+// Speichern – neu (createCategory) oder Bearbeitung (updateCategory).
+async function saveCategory() {
+  var msg = document.getElementById('catMsg');
+  var btn = document.getElementById('btnSaveCat');
+  msg.className = 'msg'; msg.textContent = '';
+
+  var name = document.getElementById('c_name').value.trim();
+  var beschreibung = document.getElementById('c_beschreibung').value.trim();
+  var sortierung = document.getElementById('c_sortierung').value.trim();
+  var aktiv = document.getElementById('c_aktiv').value;
+
+  if (!name) {
+    msg.className = 'msg err';
+    msg.textContent = 'Bitte einen Namen eingeben.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Speichern …';
+
+  try {
+    var payload = {
+      token: sessionToken,
+      name: name,
+      beschreibung: beschreibung,
+      sortierung: sortierung
+    };
+    if (editingCategoryId) {
+      payload.action = 'updateCategory';
+      payload.categoryId = editingCategoryId;
+      payload.aktiv = aktiv;
+    } else {
+      payload.action = 'createCategory';
+    }
+
+    var res = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+
+    if (!data || data.success !== true) {
+      if (data && data.error && data.error.code === 'SESSION_INVALID') { backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.'); return; }
+      var code = data && data.error && data.error.code ? data.error.code : '';
+      var text;
+      if (code === 'CATEGORY_EXISTS') {
+        text = 'Diese Kategorie existiert bereits.';
+      } else {
+        text = (data && data.error && data.error.message) ? data.error.message : 'Speichern fehlgeschlagen.';
+      }
+      msg.className = 'msg err';
+      msg.textContent = text;
+      return;
+    }
+
+    editingCategoryId = null;
+    showCatList();
+    await loadCategories();
+
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = 'Verbindungsfehler beim Speichern.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = editingCategoryId ? 'Änderungen speichern' : 'Kategorie speichern';
+  }
+}
+
+function cancelCatEditor() {
+  editingCategoryId = null;
+  showCatList();
+}
+
+// Loeschen – Modul 05 blockt bei CATEGORY_IN_USE.
+async function deleteCategory(kategorieId) {
+  if (!confirm('Diese Kategorie wirklich löschen?')) return;
+  try {
+    var res = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deleteCategory', token: sessionToken, categoryId: kategorieId })
+    });
+    var data = await res.json();
+    if (!data || data.success !== true) {
+      if (data && data.error && data.error.code === 'SESSION_INVALID') { backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.'); return; }
+      var code = data && data.error && data.error.code ? data.error.code : '';
+      if (code === 'CATEGORY_IN_USE') {
+        alert('Kategorie wird noch von Beiträgen verwendet und kann nicht gelöscht werden.');
+      } else {
+        alert((data && data.error && data.error.message) ? data.error.message : 'Löschen fehlgeschlagen.');
+      }
+      return;
+    }
+    await loadCategories();
+  } catch (e) {
+    alert('Verbindungsfehler beim Löschen.');
   }
 }
 
