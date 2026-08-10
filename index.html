@@ -209,6 +209,13 @@
     .act-delete { background: #fee2e2; color: #b91c1c; }
     .empty-note { font-size: 0.88rem; color: var(--muted); padding: 12px 0; }
 
+    .pw-rules {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 16px 12px 16px; font-size: 0.82rem; color: var(--muted); margin-bottom: 18px;
+    }
+    .pw-rules ul { margin: 8px 0 0 18px; padding: 0; }
+    .pw-rules li { margin: 2px 0; }
+
     footer { text-align: center; padding: 24px; font-size: 0.78rem; color: var(--muted); }
   </style>
 </head>
@@ -238,6 +245,7 @@
     <div class="tab active" id="tab_start" onclick="showTab('start')">Start</div>
     <div class="tab" id="tab_branding" onclick="showTab('branding')">Verein &amp; Branding</div>
     <div class="tab" id="tab_posts" onclick="showTab('posts')">Beiträge</div>
+    <div class="tab" id="tab_password" onclick="showTab('password')">Passwort</div>
   </div>
 
   <!-- Start / Session-Info (Schritt 1) -->
@@ -353,9 +361,42 @@
       <div class="msg" id="postMsg"></div>
     </div>
   </div>
+
+  <!-- Passwort (Schritt 4) -->
+  <div class="panel" id="view_password" style="display:none">
+    <h2>Passwort ändern</h2>
+    <p class="hint">Ändere das Passwort deines eigenen Zugangs. Die Prüfung erfolgt über Modul 02 (Access).</p>
+
+    <div class="field">
+      <label>Aktuelles Passwort</label>
+      <input type="password" id="pw_current" placeholder="Aktuelles Passwort" autocomplete="current-password" />
+    </div>
+    <div class="field">
+      <label>Neues Passwort</label>
+      <input type="password" id="pw_new1" placeholder="Neues Passwort" autocomplete="new-password" />
+    </div>
+    <div class="field">
+      <label>Neues Passwort wiederholen</label>
+      <input type="password" id="pw_new2" placeholder="Neues Passwort wiederholen" autocomplete="new-password" />
+    </div>
+
+    <div class="pw-rules">
+      Das neue Passwort muss enthalten:
+      <ul>
+        <li>mindestens 10 Zeichen</li>
+        <li>einen Großbuchstaben</li>
+        <li>einen Kleinbuchstaben</li>
+        <li>eine Zahl</li>
+        <li>ein Sonderzeichen</li>
+      </ul>
+    </div>
+
+    <button class="btn-primary" id="btnChangePw" onclick="changePassword()">Passwort ändern</button>
+    <div class="msg" id="pwMsg"></div>
+  </div>
 </div>
 
-<footer>ONLANG Admin · V1.1 · Schritt 3</footer>
+<footer>ONLANG Admin · V1.1 · Schritt 4</footer>
 
 <script>
 // ──────────────────────────────────────────────────────────────
@@ -482,12 +523,15 @@ function showTab(name) {
   document.getElementById('tab_start').classList.toggle('active', name === 'start');
   document.getElementById('tab_branding').classList.toggle('active', name === 'branding');
   document.getElementById('tab_posts').classList.toggle('active', name === 'posts');
+  document.getElementById('tab_password').classList.toggle('active', name === 'password');
   document.getElementById('view_start').style.display = (name === 'start') ? 'block' : 'none';
   document.getElementById('view_branding').style.display = (name === 'branding') ? 'block' : 'none';
   document.getElementById('view_posts').style.display = (name === 'posts') ? 'block' : 'none';
+  document.getElementById('view_password').style.display = (name === 'password') ? 'block' : 'none';
 
   if (name === 'branding') loadBranding();
   if (name === 'posts') { showPostsList(); loadPosts(); }
+  if (name === 'password') resetPasswordForm();
 }
 
 // ══════════════ Schritt 2: Branding ══════════════
@@ -901,6 +945,92 @@ async function deletePost(postId) {
     await loadPosts();
   } catch (e) {
     alert('Verbindungsfehler beim Löschen.');
+  }
+}
+
+// ══════════════ Schritt 4: Passwort ändern ══════════════
+
+// Formular bei jedem Öffnen des Tabs leeren.
+function resetPasswordForm() {
+  document.getElementById('pw_current').value = '';
+  document.getElementById('pw_new1').value = '';
+  document.getElementById('pw_new2').value = '';
+  var msg = document.getElementById('pwMsg');
+  msg.className = 'msg';
+  msg.textContent = '';
+}
+
+// Passwort ändern über /api/access -> Modul 02 changePassword.
+// Kein Kunden-ID im Request. Browser prüft nur: Felder ausgefüllt und
+// neues Passwort == Wiederholung. Alle inhaltlichen Regeln macht Modul 02.
+async function changePassword() {
+  var current = document.getElementById('pw_current').value;
+  var new1 = document.getElementById('pw_new1').value;
+  var new2 = document.getElementById('pw_new2').value;
+  var msg = document.getElementById('pwMsg');
+  var btn = document.getElementById('btnChangePw');
+
+  msg.className = 'msg';
+  msg.textContent = '';
+
+  // Browser-Prüfung 1: alle Felder ausgefüllt.
+  if (!current || !new1 || !new2) {
+    msg.className = 'msg err';
+    msg.textContent = 'Bitte alle Felder ausfüllen.';
+    return;
+  }
+
+  // Browser-Prüfung 2: neues Passwort == Wiederholung.
+  if (new1 !== new2) {
+    msg.className = 'msg err';
+    msg.textContent = 'Die neuen Passwörter stimmen nicht überein.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Speichern …';
+
+  try {
+    // Request ausschließlich über /api/access, nur Token + Passwörter.
+    var res = await fetch(ACCESS_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'changePassword',
+        token: sessionToken,
+        currentPassword: current,
+        newPassword: new1
+      })
+    });
+    var data = await res.json();
+
+    if (!data || data.success !== true) {
+      var code = data && data.error && data.error.code ? data.error.code : '';
+      if (code === 'SESSION_INVALID' || code === 'SESSION_EXPIRED') {
+        backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.');
+        return;
+      }
+      // Fehlermeldung von Modul 02 im Wortlaut anzeigen.
+      msg.className = 'msg err';
+      msg.textContent = (data && data.error && data.error.message)
+        ? data.error.message : 'Passwort konnte nicht geändert werden.';
+      return;
+    }
+
+    // Erfolg: grüne Meldung, dann automatisch ausloggen.
+    msg.className = 'msg ok';
+    msg.textContent = '✓ Passwort geändert. Du wirst abgemeldet – bitte melde dich mit dem neuen Passwort an.';
+
+    setTimeout(function() {
+      doLogout();
+    }, 1800);
+
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = 'Verbindungsfehler. Bitte erneut versuchen.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Passwort ändern';
   }
 }
 
