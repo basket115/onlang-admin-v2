@@ -1,10 +1,17 @@
-# ONLANG Admin Panel V1.1 – Schritt 1
+# ONLANG Admin Panel V1.1 – Schritt 2
 # Netlify-Konfiguration.
 #
-# Bindet die Edge-Function "access" an den Pfad /api/access.
-# Dadurch spricht das Frontend nur mit /api/access und nie direkt
+# Zwei Edge-Functions:
+#   access  -> /api/access  (Schritt 1: Login/Session/Logout, Modul 02)
+#   admin   -> /api/admin   (Schritt 2: abgesichertes Verein & Branding)
+#
+# Das Frontend spricht nur mit /api/access und /api/admin, nie direkt
 # mit Google Apps Script (Plan A – Proxy).
 
 [[edge_functions]]
   path = "/api/access"
   function = "access"
+
+[[edge_functions]]
+  path = "/api/admin"
+  function = "admin"

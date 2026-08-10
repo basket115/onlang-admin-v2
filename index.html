@@ -23,7 +23,7 @@
       min-height: 100vh;
     }
 
-    /* ── Kopfzeile ── */
+    /* Kopfzeile */
     header {
       background: var(--dark);
       color: #fff;
@@ -46,7 +46,7 @@
     }
     #logoutBtn:hover { background: rgba(255,255,255,0.2); }
 
-    /* ── Login ── */
+    /* Login */
     .login-wrap {
       display: flex;
       align-items: center;
@@ -95,17 +95,38 @@
     .msg.err { color: var(--err); }
     .msg.ok { color: var(--ok); }
 
-    /* ── Admin-Grundseite ── */
-    #adminView { display: none; max-width: 720px; margin: 0 auto; padding: 40px 24px; }
+    /* Admin-Bereich */
+    #adminView { display: none; max-width: 820px; margin: 0 auto; padding: 32px 24px 60px; }
+
+    .tabbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .tab {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 16px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--dark);
+    }
+    .tab.active { background: var(--dark); color: #fff; border-color: var(--dark); }
+
     .panel {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 28px 30px;
       box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+      margin-bottom: 18px;
     }
     .panel h2 { font-size: 1.1rem; margin-bottom: 6px; }
     .panel .hint { font-size: 0.85rem; color: var(--muted); margin-bottom: 22px; }
+
     .kv {
       display: grid;
       grid-template-columns: 140px 1fr;
@@ -123,15 +144,69 @@
       font-size: 0.82rem;
       font-weight: 600;
     }
-    .step-note {
-      margin-top: 22px;
-      padding: 14px 16px;
-      background: #f0fdf4;
-      border: 1px solid #bbf7d0;
+
+    /* Formularfelder */
+    .field { margin-bottom: 18px; }
+    .field label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 6px; }
+    .field input[type="text"], .field input[type="url"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid var(--border);
       border-radius: 10px;
-      font-size: 0.84rem;
-      color: #15803d;
+      font-size: 0.9rem;
+      background: var(--bg);
+      color: var(--dark);
+      outline: none;
     }
+    .field input:focus { border-color: var(--accent); }
+
+    .color-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .color-row { display: flex; align-items: center; gap: 10px; }
+    .color-row input[type="color"] {
+      width: 44px; height: 40px; border: 1.5px solid var(--border);
+      border-radius: 8px; padding: 2px; cursor: pointer; background: var(--bg);
+      flex-shrink: 0;
+    }
+    .color-row input[type="text"] {
+      flex: 1; padding: 9px 12px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-family: monospace; font-size: 0.86rem;
+      background: var(--bg); color: var(--dark); outline: none; text-transform: uppercase;
+    }
+
+    /* Vorschau */
+    .preview {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .preview-header {
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .preview-logo {
+      width: 40px; height: 40px; border-radius: 8px;
+      background: rgba(255,255,255,0.25);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; flex-shrink: 0; font-size: 18px;
+    }
+    .preview-logo img { width: 100%; height: 100%; object-fit: contain; }
+    .preview-name { color: #fff; font-weight: 700; font-size: 1rem; }
+    .preview-body { background: #fff; padding: 14px 16px; display: flex; gap: 8px; }
+    .preview-chip {
+      font-size: 0.78rem; font-weight: 600; color: #fff;
+      border-radius: 100px; padding: 4px 14px;
+    }
+
+    .btn-primary {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 10px; padding: 12px 22px; font-size: 0.92rem;
+      font-weight: 600; cursor: pointer; margin-top: 6px;
+    }
+    .btn-primary:disabled { opacity: 0.6; cursor: default; }
+
+    #brandingLoading { color: var(--muted); font-size: 0.9rem; padding: 8px 0; }
+
     footer {
       text-align: center;
       padding: 24px;
@@ -147,13 +222,12 @@
   <button id="logoutBtn" onclick="doLogout()">Abmelden</button>
 </header>
 
-<!-- ── LOGIN ── -->
+<!-- LOGIN -->
 <div class="login-wrap" id="loginView">
   <div class="login-card">
     <h1>ONLANG Admin</h1>
     <p class="sub">Melde dich mit deiner Kunden-ID an</p>
-    <input type="text" id="inpKundenId" placeholder="Kunden-ID (z. B. V002)"
-           autocomplete="off" />
+    <input type="text" id="inpKundenId" placeholder="Kunden-ID (z. B. V002)" autocomplete="off" />
     <input type="password" id="inpPassword" placeholder="Passwort"
            onkeydown="if(event.key==='Enter') doLogin()" />
     <button class="primary" id="btnLogin" onclick="doLogin()">Anmelden</button>
@@ -161,9 +235,15 @@
   </div>
 </div>
 
-<!-- ── ADMIN-GRUNDSEITE ── -->
+<!-- ADMIN -->
 <div id="adminView">
-  <div class="panel">
+  <div class="tabbar">
+    <div class="tab active" id="tab_start" onclick="showTab('start')">Start</div>
+    <div class="tab" id="tab_branding" onclick="showTab('branding')">Verein &amp; Branding</div>
+  </div>
+
+  <!-- Start / Session-Info (aus Schritt 1) -->
+  <div class="panel" id="view_start">
     <h2>Willkommen im ONLANG Admin</h2>
     <p class="hint">Angemeldete Sitzung – Daten stammen aus Modul 02 (Access).</p>
     <div class="kv">
@@ -176,37 +256,86 @@
       <div class="k">E-Mail</div>
       <div class="v" id="outEmail">–</div>
     </div>
-    <div class="step-note">
-      Schritt 1 (Login-Grundgerüst) ist aktiv. Weitere Bereiche
-      (Verein, Branding, Beiträge …) folgen in den nächsten Schritten.
+  </div>
+
+  <!-- Verein & Branding (Schritt 2) -->
+  <div class="panel" id="view_branding" style="display:none">
+    <h2>Verein &amp; Branding</h2>
+    <p class="hint">Diese Daten gehören zu deinem eigenen Verein und werden über die geprüfte Sitzung geladen.</p>
+
+    <div id="brandingLoading">Lade Vereinsdaten …</div>
+
+    <div id="brandingForm" style="display:none">
+      <div class="field">
+        <label>Vereinsname</label>
+        <input type="text" id="b_vereinsname" oninput="updatePreview()" />
+      </div>
+
+      <div class="field">
+        <label>Logo-URL</label>
+        <input type="url" id="b_logo" placeholder="https://…" oninput="updatePreview()" />
+      </div>
+
+      <div class="color-grid">
+        <div class="field">
+          <label>Primärfarbe</label>
+          <div class="color-row">
+            <input type="color" id="b_primary_pick" oninput="syncFromPicker('b_primary_pick','b_primary_hex')" />
+            <input type="text" id="b_primary_hex" maxlength="7" oninput="syncFromHex('b_primary_hex','b_primary_pick')" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Sekundärfarbe</label>
+          <div class="color-row">
+            <input type="color" id="b_secondary_pick" oninput="syncFromPicker('b_secondary_pick','b_secondary_hex')" />
+            <input type="text" id="b_secondary_hex" maxlength="7" oninput="syncFromHex('b_secondary_hex','b_secondary_pick')" />
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Vorschau</label>
+        <div class="preview">
+          <div class="preview-header" id="pv_header">
+            <div class="preview-logo" id="pv_logo">🏀</div>
+            <div class="preview-name" id="pv_name">Verein</div>
+          </div>
+          <div class="preview-body">
+            <span class="preview-chip" id="pv_chip1">Primär</span>
+            <span class="preview-chip" id="pv_chip2">Sekundär</span>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btnSaveBranding" onclick="saveBranding()">Speichern</button>
+      <div class="msg" id="brandingMsg"></div>
     </div>
   </div>
 </div>
 
-<footer>ONLANG Admin · V1.1 · Schritt 1</footer>
+<footer>ONLANG Admin · V1.1 · Schritt 2</footer>
 
 <script>
 // ──────────────────────────────────────────────────────────────
-// ONLANG Admin Panel V1.1 – Schritt 1 (Login-Grundgerüst)
+// ONLANG Admin Panel V1.1 – Schritt 2 (Verein & Branding)
 //
-// Regeln aus der Anweisung:
-// - Login NUR ueber Modul 02 "loginPassword" (POST), niemals action=login.
-// - Session-Pruefung ueber action=session.
-// - Logout ueber Modul 02 "logout".
-// - KEINE fest codierte Kunden-ID.
-// - Nach Login muss die Kunden-ID aus der Session stammen; stimmt die
-//   eingegebene ID nicht mit der Session-Kunden-ID ueberein, wird das
-//   Panel NICHT geoeffnet.
-// - Frontend spricht nur mit /api/access (Proxy, Plan A).
+// Schritt 1 (Login/Session/Logout) bleibt unveraendert erhalten.
+//
+// Sicherheitsprinzip Schritt 2:
+// - Das Frontend sendet beim Laden/Speichern NUR das Session-Token.
+// - Es sendet NIEMALS eine Kunden-ID.
+// - Der Proxy /api/admin prueft die Session bei Modul 02 und nimmt die
+//   Kunden-ID serverseitig aus der Session. Dadurch kann kein fremder
+//   Kunde geladen/geaendert werden.
+// - Bei ungueltiger Session -> zurueck zur Login-Seite.
 // ──────────────────────────────────────────────────────────────
 
 var ACCESS_PROXY = '/api/access';
+var ADMIN_PROXY  = '/api/admin';
 
-// Das Session-Token wird nur im Speicher gehalten (keine Persistenz in
-// diesem Schritt), damit ein Reload sauber auf den Login-Screen faellt.
 var sessionToken = '';
 
-// ── Login ──────────────────────────────────────────────────────
+// ── Login (Schritt 1) ─────────────────────────────────────────
 async function doLogin() {
   var kundenId = document.getElementById('inpKundenId').value.trim().toUpperCase();
   var password = document.getElementById('inpPassword').value;
@@ -226,7 +355,6 @@ async function doLogin() {
   btn.textContent = 'Anmelden …';
 
   try {
-    // Modul 02: loginPassword per POST (Passwort nicht in der URL).
     var res = await fetch(ACCESS_PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -251,14 +379,12 @@ async function doLogin() {
     var sessionUser = data.data.user || {};
     var sessionKundenId = String(sessionUser.kundenId || '').toUpperCase();
 
-    // Sicherheitsregel: eingegebene ID muss zur Session-ID passen.
     if (sessionKundenId !== kundenId) {
       msg.className = 'msg err';
       msg.textContent = 'Sitzung passt nicht zur eingegebenen Kunden-ID.';
       return;
     }
 
-    // Token merken und Session zur Sicherheit noch einmal verifizieren.
     sessionToken = data.data.token;
     await verifyAndShow();
 
@@ -271,12 +397,11 @@ async function doLogin() {
   }
 }
 
-// ── Session pruefen und Admin-Seite anzeigen ───────────────────
+// ── Session pruefen und Admin-Seite anzeigen (Schritt 1) ───────
 async function verifyAndShow() {
   var msg = document.getElementById('loginMsg');
 
   try {
-    // Modul 02: action=session prueft das Token und liefert den User.
     var res = await fetch(
       ACCESS_PROXY + '?action=session&token=' + encodeURIComponent(sessionToken)
     );
@@ -291,18 +416,18 @@ async function verifyAndShow() {
 
     var user = data.data.user;
 
-    // Admin-Grundseite mit Session-Daten fuellen.
     document.getElementById('outKundenId').textContent = user.kundenId || '–';
     document.getElementById('outRole').textContent = user.role || '–';
     document.getElementById('outName').textContent = user.name || '–';
     document.getElementById('outEmail').textContent = user.email || '–';
 
-    // Ansicht umschalten.
     document.getElementById('loginView').style.display = 'none';
     document.getElementById('adminView').style.display = 'block';
     document.getElementById('logoutBtn').style.display = 'block';
 
-    // Login-Felder leeren.
+    // Immer auf dem Start-Tab beginnen.
+    showTab('start');
+
     document.getElementById('inpPassword').value = '';
     msg.textContent = '';
 
@@ -313,12 +438,182 @@ async function verifyAndShow() {
   }
 }
 
-// ── Logout ─────────────────────────────────────────────────────
+// ── Tabs ──────────────────────────────────────────────────────
+function showTab(name) {
+  document.getElementById('tab_start').classList.toggle('active', name === 'start');
+  document.getElementById('tab_branding').classList.toggle('active', name === 'branding');
+  document.getElementById('view_start').style.display = (name === 'start') ? 'block' : 'none';
+  document.getElementById('view_branding').style.display = (name === 'branding') ? 'block' : 'none';
+
+  if (name === 'branding') {
+    loadBranding();
+  }
+}
+
+// ── Branding laden (Schritt 2) ────────────────────────────────
+async function loadBranding() {
+  var loading = document.getElementById('brandingLoading');
+  var form = document.getElementById('brandingForm');
+  var msg = document.getElementById('brandingMsg');
+
+  msg.className = 'msg';
+  msg.textContent = '';
+  loading.style.display = 'block';
+  loading.textContent = 'Lade Vereinsdaten …';
+  form.style.display = 'none';
+
+  try {
+    // Nur Token senden – KEINE Kunden-ID.
+    var res = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'loadBranding', token: sessionToken })
+    });
+    var data = await res.json();
+
+    if (!data || data.success !== true) {
+      // Session abgelaufen -> zurueck zum Login.
+      if (data && data.error && data.error.code === 'SESSION_INVALID') {
+        backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.');
+        return;
+      }
+      loading.textContent = 'Vereinsdaten konnten nicht geladen werden.';
+      return;
+    }
+
+    var d = data.data;
+    document.getElementById('b_vereinsname').value = d.vereinsname || '';
+    document.getElementById('b_logo').value = d.logoUrl || '';
+
+    var primary = normalizeHex(d.primaerfarbe) || '#000000';
+    var secondary = normalizeHex(d.sekundaerfarbe) || '#ffffff';
+
+    document.getElementById('b_primary_pick').value = primary;
+    document.getElementById('b_primary_hex').value = primary.toUpperCase();
+    document.getElementById('b_secondary_pick').value = secondary;
+    document.getElementById('b_secondary_hex').value = secondary.toUpperCase();
+
+    updatePreview();
+
+    loading.style.display = 'none';
+    form.style.display = 'block';
+
+  } catch (e) {
+    loading.textContent = 'Verbindungsfehler beim Laden.';
+  }
+}
+
+// ── Branding speichern (Schritt 2) ────────────────────────────
+async function saveBranding() {
+  var msg = document.getElementById('brandingMsg');
+  var btn = document.getElementById('btnSaveBranding');
+
+  msg.className = 'msg';
+  msg.textContent = '';
+
+  var vereinsname = document.getElementById('b_vereinsname').value.trim();
+  var logoUrl = document.getElementById('b_logo').value.trim();
+  var primary = normalizeHex(document.getElementById('b_primary_hex').value);
+  var secondary = normalizeHex(document.getElementById('b_secondary_hex').value);
+
+  if (!primary || !secondary) {
+    msg.className = 'msg err';
+    msg.textContent = 'Bitte gültige Farbwerte angeben (z. B. #CC0000).';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Speichern …';
+
+  try {
+    // Nur Token + Werte – KEINE Kunden-ID.
+    var res = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'saveBranding',
+        token: sessionToken,
+        vereinsname: vereinsname,
+        logoUrl: logoUrl,
+        primaerfarbe: primary,
+        sekundaerfarbe: secondary
+      })
+    });
+    var data = await res.json();
+
+    if (!data || data.success !== true) {
+      if (data && data.error && data.error.code === 'SESSION_INVALID') {
+        backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.');
+        return;
+      }
+      msg.className = 'msg err';
+      msg.textContent = (data && data.error && data.error.message)
+        ? data.error.message : 'Speichern fehlgeschlagen.';
+      return;
+    }
+
+    // Erfolg -> Daten frisch nachladen (Abnahmetest verlangt Reload).
+    await loadBranding();
+    msg.className = 'msg ok';
+    msg.textContent = '✓ Gespeichert.';
+
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = 'Verbindungsfehler beim Speichern.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Speichern';
+  }
+}
+
+// ── Farb-Hilfen ───────────────────────────────────────────────
+function normalizeHex(value) {
+  var v = String(value || '').trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(v)) return v.toLowerCase();
+  return '';
+}
+function syncFromPicker(pickId, hexId) {
+  document.getElementById(hexId).value = document.getElementById(pickId).value.toUpperCase();
+  updatePreview();
+}
+function syncFromHex(hexId, pickId) {
+  var v = normalizeHex(document.getElementById(hexId).value);
+  if (v) { document.getElementById(pickId).value = v; updatePreview(); }
+}
+
+// ── Vorschau ──────────────────────────────────────────────────
+function updatePreview() {
+  var name = document.getElementById('b_vereinsname').value || 'Verein';
+  var logo = document.getElementById('b_logo').value.trim();
+  var primary = normalizeHex(document.getElementById('b_primary_hex').value) || '#000000';
+  var secondary = normalizeHex(document.getElementById('b_secondary_hex').value) || '#ffffff';
+
+  document.getElementById('pv_header').style.background = primary;
+  document.getElementById('pv_name').textContent = name;
+  document.getElementById('pv_chip1').style.background = primary;
+  document.getElementById('pv_chip2').style.background = secondary;
+  // Sekundaerfarbe-Chip: Textfarbe kontrastieren, falls sehr hell.
+  document.getElementById('pv_chip2').style.color = isLight(secondary) ? '#14161a' : '#ffffff';
+
+  var logoWrap = document.getElementById('pv_logo');
+  if (logo) {
+    logoWrap.innerHTML = '<img src="' + logo + '" alt="" />';
+  } else {
+    logoWrap.innerHTML = '🏀';
+  }
+}
+function isLight(hex) {
+  var h = normalizeHex(hex);
+  if (!h) return false;
+  var r = parseInt(h.slice(1,3),16), g = parseInt(h.slice(3,5),16), b = parseInt(h.slice(5,7),16);
+  return (0.299*r + 0.587*g + 0.114*b) > 186;
+}
+
+// ── Logout (Schritt 1) ────────────────────────────────────────
 async function doLogout() {
   var token = sessionToken;
   sessionToken = '';
 
-  // Ansicht sofort zuruecksetzen (auch falls der Server-Logout scheitert).
   document.getElementById('adminView').style.display = 'none';
   document.getElementById('logoutBtn').style.display = 'none';
   document.getElementById('loginView').style.display = 'flex';
@@ -326,7 +621,6 @@ async function doLogout() {
   document.getElementById('inpPassword').value = '';
   document.getElementById('loginMsg').textContent = '';
 
-  // Modul 02: logout (Session serverseitig beenden).
   try {
     if (token) {
       await fetch(ACCESS_PROXY, {
@@ -335,9 +629,18 @@ async function doLogout() {
         body: JSON.stringify({ action: 'logout', token: token })
       });
     }
-  } catch (e) {
-    // Ansicht ist bereits zurueckgesetzt – kein weiterer Handlungsbedarf.
-  }
+  } catch (e) { /* Ansicht bereits zurueckgesetzt */ }
+}
+
+// Session ungueltig -> sauber zum Login zuruecksetzen.
+function backToLogin(text) {
+  sessionToken = '';
+  document.getElementById('adminView').style.display = 'none';
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('loginView').style.display = 'flex';
+  var msg = document.getElementById('loginMsg');
+  msg.className = 'msg err';
+  msg.textContent = text || 'Bitte erneut anmelden.';
 }
 </script>
 </body>
