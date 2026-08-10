@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ONLANG Admin</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --card: #ffffff;
+      --dark: #14161a;
+      --accent: #2f6df6;
+      --border: #e2e5ea;
+      --muted: #7a808a;
+      --ok: #16a34a;
+      --err: #dc2626;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--dark);
+      min-height: 100vh;
+    }
+
+    /* ── Kopfzeile ── */
+    header {
+      background: var(--dark);
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand { font-weight: 700; font-size: 1.05rem; letter-spacing: 0.3px; }
+    .brand span { color: var(--accent); }
+    #logoutBtn {
+      display: none;
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      padding: 7px 16px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    #logoutBtn:hover { background: rgba(255,255,255,0.2); }
+
+    /* ── Login ── */
+    .login-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 52px);
+      padding: 24px;
+    }
+    .login-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 6px 28px rgba(0,0,0,0.08);
+      text-align: center;
+    }
+    .login-card h1 { font-size: 1.35rem; margin-bottom: 4px; }
+    .login-card .sub { font-size: 0.86rem; color: var(--muted); margin-bottom: 24px; }
+    .login-card input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.92rem;
+      background: var(--bg);
+      color: var(--dark);
+      outline: none;
+      margin-bottom: 12px;
+      transition: border-color 0.15s;
+    }
+    .login-card input:focus { border-color: var(--accent); }
+    .login-card button.primary {
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .login-card button.primary:disabled { opacity: 0.6; cursor: default; }
+    .msg { font-size: 0.84rem; margin-top: 14px; min-height: 20px; }
+    .msg.err { color: var(--err); }
+    .msg.ok { color: var(--ok); }
+
+    /* ── Admin-Grundseite ── */
+    #adminView { display: none; max-width: 720px; margin: 0 auto; padding: 40px 24px; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px 30px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    }
+    .panel h2 { font-size: 1.1rem; margin-bottom: 6px; }
+    .panel .hint { font-size: 0.85rem; color: var(--muted); margin-bottom: 22px; }
+    .kv {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 10px 16px;
+      font-size: 0.92rem;
+    }
+    .kv .k { color: var(--muted); }
+    .kv .v { font-weight: 600; }
+    .badge {
+      display: inline-block;
+      background: #eef3ff;
+      color: var(--accent);
+      border-radius: 100px;
+      padding: 3px 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .step-note {
+      margin-top: 22px;
+      padding: 14px 16px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      font-size: 0.84rem;
+      color: #15803d;
+    }
+    footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">ONLANG <span>Admin</span></div>
+  <button id="logoutBtn" onclick="doLogout()">Abmelden</button>
+</header>
+
+<!-- ── LOGIN ── -->
+<div class="login-wrap" id="loginView">
+  <div class="login-card">
+    <h1>ONLANG Admin</h1>
+    <p class="sub">Melde dich mit deiner Kunden-ID an</p>
+    <input type="text" id="inpKundenId" placeholder="Kunden-ID (z. B. V002)"
+           autocomplete="off" />
+    <input type="password" id="inpPassword" placeholder="Passwort"
+           onkeydown="if(event.key==='Enter') doLogin()" />
+    <button class="primary" id="btnLogin" onclick="doLogin()">Anmelden</button>
+    <div class="msg" id="loginMsg"></div>
+  </div>
+</div>
+
+<!-- ── ADMIN-GRUNDSEITE ── -->
+<div id="adminView">
+  <div class="panel">
+    <h2>Willkommen im ONLANG Admin</h2>
+    <p class="hint">Angemeldete Sitzung – Daten stammen aus Modul 02 (Access).</p>
+    <div class="kv">
+      <div class="k">Kunden-ID</div>
+      <div class="v" id="outKundenId">–</div>
+      <div class="k">Rolle</div>
+      <div class="v"><span class="badge" id="outRole">–</span></div>
+      <div class="k">Name</div>
+      <div class="v" id="outName">–</div>
+      <div class="k">E-Mail</div>
+      <div class="v" id="outEmail">–</div>
+    </div>
+    <div class="step-note">
+      Schritt 1 (Login-Grundgerüst) ist aktiv. Weitere Bereiche
+      (Verein, Branding, Beiträge …) folgen in den nächsten Schritten.
+    </div>
+  </div>
+</div>
+
+<footer>ONLANG Admin · V1.1 · Schritt 1</footer>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+// ONLANG Admin Panel V1.1 – Schritt 1 (Login-Grundgerüst)
+//
+// Regeln aus der Anweisung:
+// - Login NUR ueber Modul 02 "loginPassword" (POST), niemals action=login.
+// - Session-Pruefung ueber action=session.
+// - Logout ueber Modul 02 "logout".
+// - KEINE fest codierte Kunden-ID.
+// - Nach Login muss die Kunden-ID aus der Session stammen; stimmt die
+//   eingegebene ID nicht mit der Session-Kunden-ID ueberein, wird das
+//   Panel NICHT geoeffnet.
+// - Frontend spricht nur mit /api/access (Proxy, Plan A).
+// ──────────────────────────────────────────────────────────────
+
+var ACCESS_PROXY = '/api/access';
+
+// Das Session-Token wird nur im Speicher gehalten (keine Persistenz in
+// diesem Schritt), damit ein Reload sauber auf den Login-Screen faellt.
+var sessionToken = '';
+
+// ── Login ──────────────────────────────────────────────────────
+async function doLogin() {
+  var kundenId = document.getElementById('inpKundenId').value.trim().toUpperCase();
+  var password = document.getElementById('inpPassword').value;
+  var msg = document.getElementById('loginMsg');
+  var btn = document.getElementById('btnLogin');
+
+  msg.className = 'msg';
+  msg.textContent = '';
+
+  if (!kundenId || !password) {
+    msg.className = 'msg err';
+    msg.textContent = 'Bitte Kunden-ID und Passwort eingeben.';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Anmelden …';
+
+  try {
+    // Modul 02: loginPassword per POST (Passwort nicht in der URL).
+    var res = await fetch(ACCESS_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'loginPassword',
+        kundenId: kundenId,
+        password: password
+      })
+    });
+
+    var data = await res.json();
+
+    if (!data || data.success !== true || !data.data || !data.data.token) {
+      var code = data && data.error && data.error.message
+        ? data.error.message
+        : 'Kunden-ID oder Passwort ist ungültig.';
+      msg.className = 'msg err';
+      msg.textContent = code;
+      return;
+    }
+
+    var sessionUser = data.data.user || {};
+    var sessionKundenId = String(sessionUser.kundenId || '').toUpperCase();
+
+    // Sicherheitsregel: eingegebene ID muss zur Session-ID passen.
+    if (sessionKundenId !== kundenId) {
+      msg.className = 'msg err';
+      msg.textContent = 'Sitzung passt nicht zur eingegebenen Kunden-ID.';
+      return;
+    }
+
+    // Token merken und Session zur Sicherheit noch einmal verifizieren.
+    sessionToken = data.data.token;
+    await verifyAndShow();
+
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = 'Verbindungsfehler. Bitte erneut versuchen.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Anmelden';
+  }
+}
+
+// ── Session pruefen und Admin-Seite anzeigen ───────────────────
+async function verifyAndShow() {
+  var msg = document.getElementById('loginMsg');
+
+  try {
+    // Modul 02: action=session prueft das Token und liefert den User.
+    var res = await fetch(
+      ACCESS_PROXY + '?action=session&token=' + encodeURIComponent(sessionToken)
+    );
+    var data = await res.json();
+
+    if (!data || data.success !== true || !data.data || !data.data.user) {
+      sessionToken = '';
+      msg.className = 'msg err';
+      msg.textContent = 'Sitzung konnte nicht bestätigt werden.';
+      return;
+    }
+
+    var user = data.data.user;
+
+    // Admin-Grundseite mit Session-Daten fuellen.
+    document.getElementById('outKundenId').textContent = user.kundenId || '–';
+    document.getElementById('outRole').textContent = user.role || '–';
+    document.getElementById('outName').textContent = user.name || '–';
+    document.getElementById('outEmail').textContent = user.email || '–';
+
+    // Ansicht umschalten.
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('adminView').style.display = 'block';
+    document.getElementById('logoutBtn').style.display = 'block';
+
+    // Login-Felder leeren.
+    document.getElementById('inpPassword').value = '';
+    msg.textContent = '';
+
+  } catch (e) {
+    sessionToken = '';
+    msg.className = 'msg err';
+    msg.textContent = 'Sitzung konnte nicht geprüft werden.';
+  }
+}
+
+// ── Logout ─────────────────────────────────────────────────────
+async function doLogout() {
+  var token = sessionToken;
+  sessionToken = '';
+
+  // Ansicht sofort zuruecksetzen (auch falls der Server-Logout scheitert).
+  document.getElementById('adminView').style.display = 'none';
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('loginView').style.display = 'flex';
+  document.getElementById('inpKundenId').value = '';
+  document.getElementById('inpPassword').value = '';
+  document.getElementById('loginMsg').textContent = '';
+
+  // Modul 02: logout (Session serverseitig beenden).
+  try {
+    if (token) {
+      await fetch(ACCESS_PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout', token: token })
+      });
+    }
+  } catch (e) {
+    // Ansicht ist bereits zurueckgesetzt – kein weiterer Handlungsbedarf.
+  }
+}
+</script>
+</body>
+</html>
