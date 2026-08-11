@@ -443,7 +443,7 @@
   </div>
 </div>
 
-<footer>ONLANG Admin · V1.1 · Schritt 5</footer>
+<footer>ONLANG Admin · V1.1 · Schritt 6</footer>
 
 <script>
 // ──────────────────────────────────────────────────────────────
@@ -729,34 +729,92 @@ function showPostsList() {
   document.getElementById('postEditor').style.display = 'none';
 }
 
-// Kategorien einmalig laden (feste Liste aus Modul 05).
-async function ensureCategories() {
-  if (categoriesLoaded) return;
+// Kategorien fuer die Beitrags-Auswahl laden (Schritt 6).
+// Quelle: mandantenfaehige Kategorien des Session-Kunden (loadCategories).
+// - Es werden nur AKTIVE Kategorien (aktiv === 'JA') angeboten.
+// - value = cat.name (Textwert), passend zur bestehenden Beitragsspeicherung.
+// - forceName: Name der aktuellen Beitragskategorie beim Bearbeiten. Diese
+//   wird IMMER als Option aufgenommen, auch wenn sie inaktiv ist oder gar
+//   nicht mehr in der Liste vorkommt (verwaiste Kategorie sichtbar halten).
+// - Wird bei JEDEM Editor-Oeffnen frisch geladen (kein Cache).
+async function ensureCategories(forceName) {
+  var sel = document.getElementById('p_kategorie');
+  var force = (forceName === undefined || forceName === null) ? '' : String(forceName).trim();
+
+  var cats = [];
   try {
     var res = await fetch(ADMIN_PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'loadPostCategories', token: sessionToken })
+      body: JSON.stringify({ action: 'loadCategories', token: sessionToken })
     });
     var data = await res.json();
-    var list = (data && data.success === true && data.data && Array.isArray(data.data.categories))
-      ? data.data.categories : [];
-    var sel = document.getElementById('p_kategorie');
-    sel.innerHTML = '';
-    if (!list.length) {
-      var o = document.createElement('option');
-      o.value = ''; o.textContent = '(keine Kategorien verfügbar)';
-      sel.appendChild(o);
-    } else {
-      list.forEach(function(cat) {
-        var o = document.createElement('option');
-        o.value = cat; o.textContent = cat;
-        sel.appendChild(o);
-      });
+    if (data && data.success === true && data.data && Array.isArray(data.data.categories)) {
+      cats = data.data.categories;
+    } else if (data && data.error && data.error.code === 'SESSION_INVALID') {
+      backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.');
+      return;
     }
-    categoriesLoaded = true;
   } catch (e) {
-    // Bei Fehler bleibt das Feld leer; Speichern meldet dann ggf. Fehler.
+    // Bei Verbindungsfehler bleibt cats leer; forceName wird unten trotzdem
+    // sichergestellt, damit ein bestehender Beitrag seine Kategorie behaelt.
+  }
+
+  // Nur aktive Kategorien als Namensliste (case-sensitive Anzeige, aber
+  // Duplikatpruefung case-insensitive).
+  var names = [];
+  var seenLower = {};
+  cats.forEach(function(c) {
+    var aktiv = String(c.aktiv || '').toUpperCase() === 'JA';
+    var nm = String(c.name || '').trim();
+    if (!nm) return;
+    if (aktiv) {
+      var low = nm.toLowerCase();
+      if (!seenLower[low]) { seenLower[low] = true; names.push(nm); }
+    }
+  });
+
+  // Select neu aufbauen.
+  sel.innerHTML = '';
+
+  names.forEach(function(nm) {
+    var o = document.createElement('option');
+    o.value = nm;       // value = Name (Textwert), NICHT die kategorieId
+    o.textContent = nm;
+    sel.appendChild(o);
+  });
+
+  // forceName (bisher gespeicherte Beitragskategorie) EXAKT sicherstellen.
+  // Wichtig: Der Select-Wert ist case-sensitive. Wenn die aktive Liste z. B.
+  // "News" enthaelt, der Beitrag aber "news" gespeichert hat, existiert noch
+  // keine Option mit exakt diesem Wert. Dann muss der exakte Wert zusaetzlich
+  // als eigene Option eingefuegt werden, damit er sichtbar/auswaehlbar bleibt.
+  if (force) {
+    var hasExact = false;
+    for (var oi = 0; oi < sel.options.length; oi++) {
+      if (sel.options[oi].value === force) { hasExact = true; break; }
+    }
+    if (!hasExact) {
+      var oForce = document.createElement('option');
+      oForce.value = force;       // exakter, gespeicherter Wert
+      oForce.textContent = force;
+      sel.appendChild(oForce);
+    }
+  }
+
+  // Falls gar keine Option existiert (keine aktiven Kategorien und kein
+  // forceName), einen Platzhalter zeigen.
+  if (!sel.options.length) {
+    var oEmpty = document.createElement('option');
+    oEmpty.value = '';
+    oEmpty.textContent = '(keine Kategorien verfügbar)';
+    sel.appendChild(oEmpty);
+    return;
+  }
+
+  // Wenn eine forceName vorgegeben ist, diese exakt auswaehlen.
+  if (force) {
+    sel.value = force;
   }
 }
 
@@ -842,7 +900,6 @@ async function openNewPost() {
 
 // Bearbeiten – Beitrag laden (mit Eigentuemer-Pruefung im Proxy).
 async function openEditPost(postId) {
-  await ensureCategories();
   var msg = document.getElementById('postMsg');
   msg.className = 'msg'; msg.textContent = '';
 
@@ -867,17 +924,10 @@ async function openEditPost(postId) {
     document.getElementById('p_bild').value = p.bildUrl || '';
     document.getElementById('p_video').value = p.videoUrl || '';
 
-    // Kategorie auswaehlen, falls in Liste vorhanden.
-    var sel = document.getElementById('p_kategorie');
-    var found = false;
-    for (var i = 0; i < sel.options.length; i++) {
-      if (sel.options[i].value === (p.kategorie || '')) { sel.selectedIndex = i; found = true; break; }
-    }
-    if (!found && sel.options.length && (p.kategorie)) {
-      var o = document.createElement('option');
-      o.value = p.kategorie; o.textContent = p.kategorie;
-      sel.appendChild(o); sel.value = p.kategorie;
-    }
+    // Kategorien frisch laden (nur aktive) UND die bisherige Kategorie des
+    // Beitrags erzwingen, damit sie sichtbar/auswaehlbar bleibt – auch wenn
+    // sie inzwischen inaktiv ist oder nicht mehr in der Liste vorkommt.
+    await ensureCategories(p.kategorie || '');
 
     document.getElementById('btnSavePost').textContent = 'Änderungen speichern';
     document.getElementById('postMsg').textContent = '';
