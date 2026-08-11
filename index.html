@@ -209,6 +209,23 @@
     .act-delete { background: #fee2e2; color: #b91c1c; }
     .empty-note { font-size: 0.88rem; color: var(--muted); padding: 12px 0; }
 
+    /* Medien-Liste (Media Schritt 1) */
+    .media-item {
+      display: flex; gap: 14px; align-items: flex-start;
+      border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+      margin-bottom: 12px; background: #fff;
+    }
+    .media-thumb {
+      width: 64px; height: 64px; border-radius: 8px; flex-shrink: 0;
+      background: var(--bg); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden; font-size: 22px; color: var(--muted);
+    }
+    .media-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .media-info { flex: 1; min-width: 0; }
+    .media-name { font-weight: 700; font-size: 0.95rem; word-break: break-word; }
+    .media-meta { font-size: 0.78rem; color: var(--muted); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+
     .pw-rules {
       background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
       padding: 12px 16px 12px 16px; font-size: 0.82rem; color: var(--muted); margin-bottom: 18px;
@@ -246,6 +263,7 @@
     <div class="tab" id="tab_branding" onclick="showTab('branding')">Verein &amp; Branding</div>
     <div class="tab" id="tab_posts" onclick="showTab('posts')">Beiträge</div>
     <div class="tab" id="tab_categories" onclick="showTab('categories')">Kategorien</div>
+    <div class="tab" id="tab_media" onclick="showTab('media')">Medien</div>
     <div class="tab" id="tab_password" onclick="showTab('password')">Passwort</div>
   </div>
 
@@ -409,6 +427,18 @@
     </div>
   </div>
 
+  <!-- Medien (Media Schritt 1, read-only) -->
+  <div class="panel" id="view_media" style="display:none">
+    <h2>Medien</h2>
+    <p class="hint">Übersicht deiner eigenen Mediendateien. (Nur Ansicht – Upload und Bearbeitung folgen später.)</p>
+
+    <div class="post-toolbar">
+      <button class="btn-secondary" onclick="loadMedia()">Aktualisieren</button>
+    </div>
+    <div id="mediaLoading">Lade Medien …</div>
+    <div id="mediaList"></div>
+  </div>
+
   <!-- Passwort (Schritt 4) -->
   <div class="panel" id="view_password" style="display:none">
     <h2>Passwort ändern</h2>
@@ -443,7 +473,7 @@
   </div>
 </div>
 
-<footer>ONLANG Admin · V1.1 · Schritt 6</footer>
+<footer>ONLANG Admin · V1.1 · Media Schritt 1</footer>
 
 <script>
 // ──────────────────────────────────────────────────────────────
@@ -571,16 +601,19 @@ function showTab(name) {
   document.getElementById('tab_branding').classList.toggle('active', name === 'branding');
   document.getElementById('tab_posts').classList.toggle('active', name === 'posts');
   document.getElementById('tab_categories').classList.toggle('active', name === 'categories');
+  document.getElementById('tab_media').classList.toggle('active', name === 'media');
   document.getElementById('tab_password').classList.toggle('active', name === 'password');
   document.getElementById('view_start').style.display = (name === 'start') ? 'block' : 'none';
   document.getElementById('view_branding').style.display = (name === 'branding') ? 'block' : 'none';
   document.getElementById('view_posts').style.display = (name === 'posts') ? 'block' : 'none';
   document.getElementById('view_categories').style.display = (name === 'categories') ? 'block' : 'none';
+  document.getElementById('view_media').style.display = (name === 'media') ? 'block' : 'none';
   document.getElementById('view_password').style.display = (name === 'password') ? 'block' : 'none';
 
   if (name === 'branding') loadBranding();
   if (name === 'posts') { showPostsList(); loadPosts(); }
   if (name === 'categories') { showCatList(); loadCategories(); }
+  if (name === 'media') loadMedia();
   if (name === 'password') resetPasswordForm();
 }
 
@@ -1356,6 +1389,83 @@ async function deleteCategory(kategorieId) {
     await loadCategories();
   } catch (e) {
     alert('Verbindungsfehler beim Löschen.');
+  }
+}
+
+// ══════════════ Media Schritt 1: Medienliste (read-only) ══════════════
+
+// Dateigroesse menschenlesbar (Eingabe kann Bytes-Zahl oder Text sein).
+function formatMediaSize(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  var n = Number(s);
+  if (isNaN(n) || n <= 0) return esc(s); // schon formatiert oder unbekannt
+  var units = ['B','KB','MB','GB'];
+  var i = 0;
+  while (n >= 1024 && i < units.length - 1) { n = n / 1024; i++; }
+  var val = (i === 0) ? String(Math.round(n)) : n.toFixed(1);
+  return val + ' ' + units[i];
+}
+
+// Medien laden – nur eigener Mandant (Proxy erzwingt + prueft das).
+async function loadMedia() {
+  var loading = document.getElementById('mediaLoading');
+  var list = document.getElementById('mediaList');
+  loading.style.display = 'block';
+  loading.textContent = 'Lade Medien …';
+  list.innerHTML = '';
+
+  try {
+    var res = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'loadMedia', token: sessionToken })
+    });
+    var data = await res.json();
+
+    if (!data || data.success !== true) {
+      if (data && data.error && data.error.code === 'SESSION_INVALID') { backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.'); return; }
+      loading.textContent = 'Medien konnten nicht geladen werden.';
+      return;
+    }
+
+    loading.style.display = 'none';
+    var media = data.data.media || [];
+    if (!media.length) {
+      list.innerHTML = '<div class="empty-note">Noch keine Medien vorhanden.</div>';
+      return;
+    }
+
+    list.innerHTML = media.map(function(m) {
+      var name = esc(m.dateiname || '(ohne Namen)');
+      var typ = esc(m.mimeType || m.dateityp || '');
+      var groesse = formatMediaSize(m.dateigroesse);
+      var masse = (m.breite && m.hoehe) ? (esc(String(m.breite)) + ' × ' + esc(String(m.hoehe))) : '';
+      var status = esc(m.status || '');
+      var datum = m.hochgeladenAm ? esc(String(m.hochgeladenAm).slice(0,10)) : '';
+      var thumb = m.vorschauUrl
+        ? '<img src="' + esc(m.vorschauUrl) + '" alt="" />'
+        : '🖼️';
+
+      var metaParts = [];
+      if (typ) metaParts.push('<span>' + typ + '</span>');
+      if (groesse) metaParts.push('<span>' + groesse + '</span>');
+      if (masse) metaParts.push('<span>' + masse + '</span>');
+      if (status) metaParts.push('<span>' + status + '</span>');
+      if (datum) metaParts.push('<span>' + datum + '</span>');
+
+      return '' +
+        '<div class="media-item">' +
+          '<div class="media-thumb">' + thumb + '</div>' +
+          '<div class="media-info">' +
+            '<div class="media-name">' + name + '</div>' +
+            '<div class="media-meta">' + metaParts.join('') + '</div>' +
+          '</div>' +
+        '</div>';
+    }).join('');
+
+  } catch (e) {
+    loading.textContent = 'Verbindungsfehler beim Laden.';
   }
 }
 
