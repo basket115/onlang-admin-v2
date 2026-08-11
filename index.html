@@ -226,6 +226,21 @@
     .media-name { font-weight: 700; font-size: 0.95rem; word-break: break-word; }
     .media-meta { font-size: 0.78rem; color: var(--muted); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
 
+    /* Medien-Upload (Media Schritt 2c) */
+    .media-upload-box {
+      border: 1px solid var(--border); border-radius: 12px; padding: 18px;
+      background: var(--bg); margin-bottom: 22px;
+    }
+    .media-upload-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 5px; }
+    .media-upload-hint { font-size: 0.8rem; color: var(--muted); margin-bottom: 14px; line-height: 1.45; }
+    .media-upload-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .media-file-input {
+      flex: 1; min-width: 240px; padding: 9px 10px; background: #fff;
+      border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.85rem;
+    }
+    .media-selected { font-size: 0.8rem; color: var(--muted); margin-top: 10px; min-height: 18px; }
+    #mediaUploadMsg { margin-top: 10px; }
+
     .pw-rules {
       background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
       padding: 12px 16px 12px 16px; font-size: 0.82rem; color: var(--muted); margin-bottom: 18px;
@@ -427,10 +442,27 @@
     </div>
   </div>
 
-  <!-- Medien (Media Schritt 1, read-only) -->
+  <!-- Medien (Media Schritt 2c: Bild-Upload + Übersicht) -->
   <div class="panel" id="view_media" style="display:none">
     <h2>Medien</h2>
-    <p class="hint">Übersicht deiner eigenen Mediendateien. (Nur Ansicht – Upload und Bearbeitung folgen später.)</p>
+    <p class="hint">Lade Bilder sicher hoch und verwalte die Mediendateien deines eigenen Vereins.</p>
+
+    <div class="media-upload-box">
+      <div class="media-upload-title">Bild hochladen</div>
+      <div class="media-upload-hint">Erlaubt: JPG, PNG, WebP und GIF. Der Upload wird deinem angemeldeten Verein automatisch zugeordnet.</div>
+      <div class="media-upload-row">
+        <input
+          class="media-file-input"
+          type="file"
+          id="mediaFileInput"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          onchange="onMediaFileSelected()"
+        />
+        <button class="btn-primary" id="btnMediaUpload" style="margin-top:0" onclick="uploadMediaImage()" disabled>Hochladen</button>
+      </div>
+      <div class="media-selected" id="mediaSelected">Noch kein Bild ausgewählt.</div>
+      <div class="msg" id="mediaUploadMsg"></div>
+    </div>
 
     <div class="post-toolbar">
       <button class="btn-secondary" onclick="loadMedia()">Aktualisieren</button>
@@ -473,7 +505,7 @@
   </div>
 </div>
 
-<footer>ONLANG Admin · V1.1 · Media Schritt 1</footer>
+<footer>ONLANG Admin · V1.1 · Media Bild-Upload</footer>
 
 <script>
 // ──────────────────────────────────────────────────────────────
@@ -1392,7 +1424,161 @@ async function deleteCategory(kategorieId) {
   }
 }
 
-// ══════════════ Media Schritt 1: Medienliste (read-only) ══════════════
+// ══════════════ Media Schritt 2c: Bild-Upload + Medienliste ══════════════
+
+var mediaUploadBusy = false;
+
+function onMediaFileSelected() {
+  var input = document.getElementById('mediaFileInput');
+  var selected = document.getElementById('mediaSelected');
+  var msg = document.getElementById('mediaUploadMsg');
+  var btn = document.getElementById('btnMediaUpload');
+  var file = input.files && input.files[0] ? input.files[0] : null;
+
+  msg.className = 'msg';
+  msg.textContent = '';
+  btn.disabled = true;
+
+  if (!file) {
+    selected.textContent = 'Noch kein Bild ausgewählt.';
+    return;
+  }
+
+  var allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (allowed.indexOf(String(file.type || '').toLowerCase()) === -1) {
+    selected.textContent = 'Nicht unterstützte Datei: ' + file.name;
+    msg.className = 'msg err';
+    msg.textContent = 'Bitte nur JPG, PNG, WebP oder GIF auswählen.';
+    input.value = '';
+    return;
+  }
+
+  // Modul 04 begrenzt Bilder aktuell auf 10 MB. Zusätzlich bereits im
+  // Browser prüfen, damit eine zu große Datei nicht unnötig hochgeladen wird.
+  if (file.size > 10 * 1024 * 1024) {
+    selected.textContent = 'Datei zu groß: ' + file.name;
+    msg.className = 'msg err';
+    msg.textContent = 'Das Bild darf maximal 10 MB groß sein.';
+    input.value = '';
+    return;
+  }
+
+  selected.textContent = file.name + ' · ' + formatMediaSize(file.size);
+  btn.disabled = false;
+}
+
+function resetMediaUpload() {
+  var input = document.getElementById('mediaFileInput');
+  var selected = document.getElementById('mediaSelected');
+  var btn = document.getElementById('btnMediaUpload');
+  input.value = '';
+  selected.textContent = 'Noch kein Bild ausgewählt.';
+  btn.disabled = true;
+}
+
+async function uploadMediaImage() {
+  if (mediaUploadBusy) return;
+
+  var input = document.getElementById('mediaFileInput');
+  var file = input.files && input.files[0] ? input.files[0] : null;
+  var msg = document.getElementById('mediaUploadMsg');
+  var btn = document.getElementById('btnMediaUpload');
+
+  msg.className = 'msg';
+  msg.textContent = '';
+
+  if (!file) {
+    msg.className = 'msg err';
+    msg.textContent = 'Bitte zuerst ein Bild auswählen.';
+    return;
+  }
+
+  mediaUploadBusy = true;
+  btn.disabled = true;
+  btn.textContent = 'Upload läuft …';
+  msg.textContent = 'Upload wird vorbereitet …';
+
+  try {
+    // 1) Frische, mandantengebundene Upload-Signatur vom Admin-Proxy.
+    var signRes = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'signMediaUpload', token: sessionToken })
+    });
+    var sign = await signRes.json();
+
+    if (!sign || sign.success !== true || !sign.data) {
+      if (sign && sign.error && sign.error.code === 'SESSION_INVALID') {
+        backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.');
+        return;
+      }
+      throw new Error(sign && sign.error && sign.error.message ? sign.error.message : 'Upload konnte nicht vorbereitet werden.');
+    }
+
+    var d = sign.data;
+    var form = new FormData();
+    form.append('file', file);
+    form.append('api_key', d.apiKey);
+    form.append('timestamp', String(d.timestamp));
+    form.append('signature', d.signature);
+    form.append('public_id', d.publicId);
+    form.append('asset_folder', d.assetFolder);
+
+    msg.textContent = 'Bild wird hochgeladen …';
+
+    // 2) Bild direkt vom Browser zu Cloudinary.
+    var cloudRes = await fetch(
+      'https://api.cloudinary.com/v1_1/' + encodeURIComponent(d.cloudName) + '/image/upload',
+      { method: 'POST', body: form }
+    );
+    var cloud = await cloudRes.json();
+
+    if (!cloudRes.ok || !cloud || cloud.error) {
+      var cloudMessage = cloud && cloud.error && cloud.error.message ? cloud.error.message : 'Cloudinary-Upload fehlgeschlagen.';
+      throw new Error(cloudMessage);
+    }
+
+    msg.textContent = 'Bild wird in ONLANG registriert …';
+
+    // 3) Cloudinary-Ergebnis über den sicheren Proxy in Modul 04 registrieren.
+    // Keine Kunden-ID aus dem Browser senden.
+    var registerRes = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'registerMediaUpload',
+        token: sessionToken,
+        dateiname: file.name,
+        mimeType: file.type,
+        cloudinary: cloud
+      })
+    });
+    var registered = await registerRes.json();
+
+    if (!registered || registered.success !== true) {
+      if (registered && registered.error && registered.error.code === 'SESSION_INVALID') {
+        backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.');
+        return;
+      }
+      throw new Error(registered && registered.error && registered.error.message ? registered.error.message : 'Bild konnte nicht in ONLANG registriert werden.');
+    }
+
+    resetMediaUpload();
+    msg.className = 'msg ok';
+    msg.textContent = '✓ Bild erfolgreich hochgeladen.';
+
+    // 4) Bestehende Medienliste sofort aktualisieren.
+    await loadMedia();
+
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = e && e.message ? e.message : 'Bild konnte nicht hochgeladen werden.';
+  } finally {
+    mediaUploadBusy = false;
+    btn.textContent = 'Hochladen';
+    btn.disabled = !(input.files && input.files[0]);
+  }
+}
 
 // Dateigroesse menschenlesbar (Eingabe kann Bytes-Zahl oder Text sein).
 function formatMediaSize(v) {
