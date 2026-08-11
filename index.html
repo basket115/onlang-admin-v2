@@ -209,6 +209,28 @@
     .act-delete { background: #fee2e2; color: #b91c1c; }
     .empty-note { font-size: 0.88rem; color: var(--muted); padding: 12px 0; }
 
+    /* Medienauswahl im Beitragseditor (Media -> Beitrag) */
+    .media-picker { display: flex; flex-wrap: wrap; gap: 10px; }
+    .media-pick {
+      width: 96px; border: 2px solid var(--border); border-radius: 10px;
+      padding: 6px; cursor: pointer; background: #fff; text-align: center;
+      transition: border-color 0.12s;
+    }
+    .media-pick:hover { border-color: var(--accent); }
+    .media-pick.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(47,109,246,0.18); }
+    .media-pick .mp-thumb {
+      width: 100%; height: 72px; border-radius: 6px; background: var(--bg);
+      display: flex; align-items: center; justify-content: center; overflow: hidden;
+      font-size: 20px; color: var(--muted);
+    }
+    .media-pick .mp-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .media-pick .mp-name {
+      font-size: 0.72rem; margin-top: 4px; word-break: break-word; line-height: 1.2;
+      max-height: 2.4em; overflow: hidden;
+    }
+    .media-pick.mp-none .mp-thumb { font-size: 0.8rem; }
+    .media-pick.mp-external { border-style: dashed; }
+
     /* Medien-Liste (Media Schritt 1) */
     .media-item {
       display: flex; gap: 14px; align-items: flex-start;
@@ -226,7 +248,7 @@
     .media-name { font-weight: 700; font-size: 0.95rem; word-break: break-word; }
     .media-meta { font-size: 0.78rem; color: var(--muted); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
 
-    /* Medien-Upload (Media Schritt 2c) */
+/* Medien-Upload (Media Schritt 2c) */
     .media-upload-box {
       border: 1px solid var(--border); border-radius: 12px; padding: 18px;
       background: var(--bg); margin-bottom: 22px;
@@ -240,6 +262,7 @@
     }
     .media-selected { font-size: 0.8rem; color: var(--muted); margin-top: 10px; min-height: 18px; }
     #mediaUploadMsg { margin-top: 10px; }
+
 
     .pw-rules {
       background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
@@ -374,15 +397,17 @@
           Der Teaser wird automatisch aus dem Anfang des Inhalts erzeugt.
         </div>
       </div>
-      <div class="color-grid">
-        <div class="field">
-          <label>Bild-URL (optional)</label>
-          <input type="url" id="p_bild" placeholder="https://…" />
-        </div>
-        <div class="field">
-          <label>Video-URL (optional)</label>
-          <input type="url" id="p_video" placeholder="https://…" />
-        </div>
+      <div class="field">
+        <label>Bild aus Medienbibliothek</label>
+        <!-- Haelt die tatsaechlich gespeicherte Bild-URL. savePost() liest
+             weiterhin p_bild.value als bildUrl (unveraenderter Speicherweg). -->
+        <input type="hidden" id="p_bild" value="" />
+        <div id="mediaPickerLoading" style="font-size:0.85rem;color:var(--muted);padding:6px 0">Lade Medien …</div>
+        <div id="mediaPicker" class="media-picker"></div>
+      </div>
+      <div class="field">
+        <label>Video-URL (optional)</label>
+        <input type="url" id="p_video" placeholder="https://…" />
       </div>
       <div class="field">
         <label>Kategorie</label>
@@ -505,7 +530,7 @@
   </div>
 </div>
 
-<footer>ONLANG Admin · V1.1 · Media Bild-Upload</footer>
+<footer>ONLANG Admin · V1.1 · Media Bild-Upload + Beitrag</footer>
 
 <script>
 // ──────────────────────────────────────────────────────────────
@@ -946,6 +971,104 @@ async function loadPosts() {
   }
 }
 
+// ── Media -> Beitrag: Bildauswahl aus der Medienbibliothek ──────
+// Nutzt die bestehende sichere Action loadMedia (Session+Proxy).
+// Als Bild-URL wird vorschauUrl verwendet (einzige im Frontend verfuegbare,
+// nachweislich ladbare Cloudinary-URL). Keine Backend-Aenderung.
+
+// Cache der zuletzt geladenen Medien (fuer Auswahl-Abgleich).
+var _postMediaCache = [];
+
+// Setzt den ausgewaehlten Bildwert und markiert die Kachel.
+function selectPostMedia(url) {
+  var hidden = document.getElementById('p_bild');
+  hidden.value = url || '';
+  // Markierung aktualisieren.
+  var picker = document.getElementById('mediaPicker');
+  var tiles = picker.getElementsByClassName('media-pick');
+  for (var i = 0; i < tiles.length; i++) {
+    var tileUrl = tiles[i].getAttribute('data-url') || '';
+    if (tileUrl === (url || '')) {
+      tiles[i].classList.add('selected');
+    } else {
+      tiles[i].classList.remove('selected');
+    }
+  }
+}
+
+// Baut die Auswahl auf. currentBildUrl = bereits gespeicherte URL (beim
+// Bearbeiten); wird als ausgewaehlt markiert bzw. als externes Bild erhalten.
+async function renderMediaPicker(currentBildUrl) {
+  var loading = document.getElementById('mediaPickerLoading');
+  var picker = document.getElementById('mediaPicker');
+  var current = (currentBildUrl === undefined || currentBildUrl === null) ? '' : String(currentBildUrl).trim();
+
+  loading.style.display = 'block';
+  loading.textContent = 'Lade Medien …';
+  picker.innerHTML = '';
+
+  var media = [];
+  try {
+    var res = await fetch(ADMIN_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'loadMedia', token: sessionToken })
+    });
+    var data = await res.json();
+    if (data && data.success === true && data.data && Array.isArray(data.data.media)) {
+      media = data.data.media;
+    } else if (data && data.error && data.error.code === 'SESSION_INVALID') {
+      backToLogin('Sitzung abgelaufen. Bitte erneut anmelden.');
+      return;
+    }
+  } catch (e) {
+    // Bei Fehler bleibt die Liste leer; ein evtl. bestehendes externes Bild
+    // wird unten trotzdem als Kachel erhalten.
+  }
+  _postMediaCache = media;
+
+  loading.style.display = 'none';
+
+  var html = '';
+
+  // Kachel "Kein Bild".
+  var noneSelected = (!current) ? ' selected' : '';
+  html += '<div class="media-pick mp-none' + noneSelected + '" data-url="" onclick="selectPostMedia(\'\')">' +
+            '<div class="mp-thumb">✕</div>' +
+            '<div class="mp-name">Kein Bild</div>' +
+          '</div>';
+
+  // Pruefen, ob die aktuelle URL zu einem Medium passt.
+  var currentMatches = false;
+
+  media.forEach(function(m) {
+    var url = String(m.vorschauUrl || '').trim();
+    if (!url) return; // ohne URL nicht auswaehlbar
+    var name = esc(m.dateiname || '(ohne Namen)');
+    var sel = (current && url === current) ? ' selected' : '';
+    if (current && url === current) currentMatches = true;
+    var thumb = '<img src="' + esc(url) + '" alt="" />';
+    html += '<div class="media-pick' + sel + '" data-url="' + esc(url) + '" onclick="selectPostMedia(\'' + esc(url) + '\')">' +
+              '<div class="mp-thumb">' + thumb + '</div>' +
+              '<div class="mp-name">' + name + '</div>' +
+            '</div>';
+  });
+
+  // Bestehende Bild-URL, die NICHT in der Bibliothek vorkommt, erhalten
+  // (aelteres/externes Bild darf nicht verloren gehen).
+  if (current && !currentMatches) {
+    html += '<div class="media-pick mp-external selected" data-url="' + esc(current) + '" onclick="selectPostMedia(\'' + esc(current) + '\')">' +
+              '<div class="mp-thumb"><img src="' + esc(current) + '" alt="" /></div>' +
+              '<div class="mp-name">Aktuelles externes/älteres Bild</div>' +
+            '</div>';
+  }
+
+  picker.innerHTML = html;
+
+  // Hidden-Feld auf den aktuellen Wert setzen (bewahrt bestehende URL).
+  document.getElementById('p_bild').value = current;
+}
+
 // Neuer Beitrag – Editor leer oeffnen.
 async function openNewPost() {
   editingPostId = null;
@@ -954,6 +1077,8 @@ async function openNewPost() {
   document.getElementById('p_inhalt').value = '';
   document.getElementById('p_bild').value = '';
   document.getElementById('p_video').value = '';
+  // Medienauswahl frisch laden, kein Bild vorausgewaehlt.
+  await renderMediaPicker('');
   if (document.getElementById('p_kategorie').options.length) {
     document.getElementById('p_kategorie').selectedIndex = 0;
   }
@@ -988,6 +1113,10 @@ async function openEditPost(postId) {
     document.getElementById('p_inhalt').value = p.inhalt || '';
     document.getElementById('p_bild').value = p.bildUrl || '';
     document.getElementById('p_video').value = p.videoUrl || '';
+
+    // Medienauswahl frisch laden; bestehende bildUrl markieren bzw. als
+    // externes/aelteres Bild erhalten (darf nicht verloren gehen).
+    await renderMediaPicker(p.bildUrl || '');
 
     // Kategorien frisch laden (nur aktive) UND die bisherige Kategorie des
     // Beitrags erzwingen, damit sie sichtbar/auswaehlbar bleibt – auch wenn
@@ -1424,7 +1553,7 @@ async function deleteCategory(kategorieId) {
   }
 }
 
-// ══════════════ Media Schritt 2c: Bild-Upload + Medienliste ══════════════
+// ══════════════ Media Upload: produktiver Bild-Upload (erhalten) ══════════════
 
 var mediaUploadBusy = false;
 
@@ -1579,6 +1708,9 @@ async function uploadMediaImage() {
     btn.disabled = !(input.files && input.files[0]);
   }
 }
+
+
+// ══════════════ Media Schritt 1: Medienliste (read-only) ══════════════
 
 // Dateigroesse menschenlesbar (Eingabe kann Bytes-Zahl oder Text sein).
 function formatMediaSize(v) {
