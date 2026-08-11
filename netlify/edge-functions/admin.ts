@@ -39,6 +39,10 @@ const REGISTRATION_URL =
 const STUDIO_URL =
   "https://script.google.com/macros/s/AKfycbzxVnBKGbziJqYP0TZ3BHmk39TbyS5NmsxlZ2bDb0cgncfPsukRkvLsZSEmxzemZhAZCQ/exec";
 
+// Modul 04 – Media (Medien-Metadaten). Eigene Bereitstellung, eigene URL.
+const MEDIA_URL =
+  "https://script.google.com/macros/s/AKfycbxnmMiqoSNyJj2cFsEsr1lURhkQ1ECaN2otCXmRUGypfKk6skM0wt39AopI6BVPYCjP/exec";
+
 const POST_STATUS_DRAFT = "DRAFT";
 const POST_STATUS_PUBLISHED = "PUBLISHED";
 const TEASER_LENGTH = 150;
@@ -125,6 +129,20 @@ async function studioPost(payload: Record<string, string>): Promise<any> {
       "User-Agent": "ONLANG-Admin-Proxy/1.1",
     },
     body: JSON.stringify(payload),
+    redirect: "follow",
+  });
+  return await res.json();
+}
+
+// ── Modul 04: Media LESEN ueber GET ─────────────────────────────
+// Eigener Helper gegen MEDIA_URL, damit studioGet (Studio) unangetastet
+// bleibt. Nur kurze Parameter (kundenId) -> GET ausreichend.
+async function mediaGet(params: Record<string, string>): Promise<any> {
+  const qs = new URLSearchParams(params).toString();
+  const url = MEDIA_URL + "?" + qs;
+  const res = await fetch(url, {
+    method: "get",
+    headers: { "User-Agent": "ONLANG-Admin-Proxy/1.1" },
     redirect: "follow",
   });
   return await res.json();
@@ -463,6 +481,80 @@ export default async (request: Request, _context: Context) => {
         return jsonOut({ success: false, error: { code: code, message: msg } });
       }
       return jsonOut({ success: true, data: { kategorieId: result.kategorieId } });
+    }
+
+    // ══════════════ Media Schritt 1: Medienliste (read-only) ══════════════
+    // Datenquelle: Modul 04 (Media_Files). Modul 04 trennt Mandanten NICHT
+    // zuverlaessig selbst, daher wird die Sicherheit hier im Proxy erzwungen:
+    // 1) getFiles wird IMMER mit der Session-kundenId aufgerufen,
+    // 2) das Ergebnis wird zusaetzlich gegengeprueft – nur Datensaetze mit
+    //    media.kundenId === Session-kundenId gelangen ans Frontend,
+    // 3) geloeschte Datensaetze werden standardmaessig nicht zurueckgegeben.
+    if (action === "loadMedia") {
+      const result = await mediaGet({ action: "getFiles", kundenId: kundenId });
+
+      if (!result || result.success !== true) {
+        const msg =
+          result && result.message ? result.message : "Medien konnten nicht geladen werden.";
+        return jsonOut({ success: false, error: { code: "LOAD_FAILED", message: msg } });
+      }
+
+      // Reale Modul-04-Struktur (successResponse_):
+      //   { success: true, data: { files: [...], count, filters } }
+      // Primaer wird result.data.files ausgewertet. Die weiteren Varianten
+      // sind nur defensive Rueckfallebenen und aendern nichts an der Struktur.
+      const rawList =
+        (result.data && Array.isArray(result.data.files)) ? result.data.files
+        : (result.data && Array.isArray(result.data.media)) ? result.data.media
+        : Array.isArray(result.files) ? result.files
+        : Array.isArray(result.media) ? result.media
+        : Array.isArray(result.data) ? result.data
+        : [];
+
+      const sessionKunde = kundenId; // bereits uppercase
+      const safe: Array<Record<string, unknown>> = [];
+
+      for (const item of rawList) {
+        if (!item) continue;
+
+        // kundenId des Datensatzes robust ermitteln (verschiedene Feldnamen).
+        const itemKunde = String(
+          item.kundenId !== undefined ? item.kundenId :
+          item.Kunden_ID !== undefined ? item.Kunden_ID : ""
+        ).trim().toUpperCase();
+
+        // Sicherheits-Gegenpruefung: fremde Mandanten strikt verwerfen.
+        if (itemKunde !== sessionKunde) continue;
+
+        // Status ermitteln; geloeschte ausblenden.
+        const status = String(
+          item.status !== undefined ? item.status :
+          item.Status !== undefined ? item.Status : ""
+        ).trim();
+        const statusUpper = status.toUpperCase();
+        if (statusUpper === "GELOESCHT" || statusUpper === "DELETED" || statusUpper === "GELÖSCHT") {
+          continue;
+        }
+
+        // Nur die fuer die Uebersicht noetigen Felder, robust gegen Feldnamen.
+        const pick = (a: string, b: string) =>
+          item[a] !== undefined ? item[a] : (item[b] !== undefined ? item[b] : "");
+
+        safe.push({
+          mediaId: String(pick("mediaId", "Media_ID") || ""),
+          dateiname: String(pick("dateiname", "Dateiname") || ""),
+          dateityp: String(pick("dateityp", "Dateityp") || ""),
+          mimeType: String(pick("mimeType", "MIME_Type") || ""),
+          vorschauUrl: String(pick("vorschauUrl", "Vorschau_URL") || ""),
+          dateigroesse: String(pick("dateigroesse", "Dateigröße") || ""),
+          breite: String(pick("breite", "Breite") || ""),
+          hoehe: String(pick("hoehe", "Höhe") || ""),
+          status: status,
+          hochgeladenAm: String(pick("hochgeladenAm", "Hochgeladen_Am") || ""),
+        });
+      }
+
+      return jsonOut({ success: true, data: { media: safe } });
     }
 
     return jsonOut({
