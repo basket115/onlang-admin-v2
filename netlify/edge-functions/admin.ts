@@ -148,6 +148,50 @@ async function mediaGet(params: Record<string, string>): Promise<any> {
   return await res.json();
 }
 
+// ── Cloudinary: Upload-Signatur (Media Schritt 2a) ──────────────
+// Signatur-Semantik (verifiziert gegen Cloudinary-Doku):
+// - String-to-Sign enthaelt ALLE zu signierenden Upload-Parameter AUSSER
+//   file, cloud_name, resource_type und api_key.
+// - Parameter alphabetisch nach Namen sortiert, als name=value mit & verbunden.
+// - Am Ende OHNE Trenner das api_secret anhaengen.
+// - SHA-256 Hex-Digest = signature. (Cloudinary akzeptiert SHA-1 und SHA-256.)
+// - Gueltigkeit: Cloudinary prueft den timestamp gegen ein Zeitfenster von
+//   bis zu ca. einer Stunde ("Stale request" ausserhalb). Es gibt KEIN
+//   kuerzeres, frei konfigurierbares Ablauffenster auf Cloudinary-Seite.
+async function sha256Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  const bytes = new Uint8Array(digest);
+  let hex = "";
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+// Erzeugt die Cloudinary-Signatur ueber die uebergebenen (zu signierenden)
+// Parameter. apiSecret wird nur hier verwendet, nie zurueckgegeben/geloggt.
+async function cloudinarySignature(
+  paramsToSign: Record<string, string>,
+  apiSecret: string
+): Promise<string> {
+  const sortedKeys = Object.keys(paramsToSign).sort();
+  const toSign = sortedKeys
+    .map((k) => k + "=" + paramsToSign[k])
+    .join("&");
+  return await sha256Hex(toSign + apiSecret);
+}
+
+// Eindeutiger, serverseitiger Nonce (Mandanten-Uploadidentifier).
+function makeUploadNonce(): string {
+  // crypto.randomUUID ist in Netlify Edge (Deno) verfuegbar.
+  try {
+    return crypto.randomUUID().replace(/-/g, "");
+  } catch {
+    return String(Date.now()) + Math.random().toString(16).slice(2);
+  }
+}
+
 // Teaser automatisch aus dem Inhalt (Plan A, ca. erste 150 Zeichen).
 function makeTeaser(inhalt: string): string {
   const clean = String(inhalt || "").replace(/\s+/g, " ").trim();
@@ -555,6 +599,61 @@ export default async (request: Request, _context: Context) => {
       }
 
       return jsonOut({ success: true, data: { media: safe } });
+    }
+
+    // ══════════════ Media Schritt 2a: Upload-Signatur ══════════════
+    // Erzeugt NUR eine Cloudinary-Signatur fuer einen signierten
+    // Direktupload (Browser -> Cloudinary). Kein Datei-Upload, kein
+    // createMedia, kein Modul-04-Zugriff. Alle mandantenbindenden Werte
+    // (public_id, asset_folder) werden serverseitig aus der Session-kundenId
+    // erzeugt und mitsigniert; der Browser bestimmt sie nicht.
+    if (action === "signMediaUpload") {
+      const cloudName = Deno.env.get("CLOUDINARY_CLOUD_NAME") || "";
+      const apiKey = Deno.env.get("CLOUDINARY_API_KEY") || "";
+      const apiSecret = Deno.env.get("CLOUDINARY_API_SECRET") || "";
+
+      if (!cloudName || !apiKey || !apiSecret) {
+        return jsonOut({
+          success: false,
+          error: {
+            code: "CLOUDINARY_CONFIG_MISSING",
+            message: "Cloudinary-Konfiguration fehlt.",
+          },
+        });
+      }
+
+      // Serverseitige, mandantengebundene Werte.
+      const nonce = makeUploadNonce();
+      const assetFolder = "onlang/" + kundenId;
+      const publicId = "onlang/" + kundenId + "/" + nonce;
+      const timestamp = Math.floor(Date.now() / 1000);
+
+      // Nur diese Parameter werden signiert (NICHT: file, cloud_name,
+      // resource_type, api_key). resource_type=image wird beim Upload
+      // separat als Pfadsegment gesetzt und gehoert nicht in die Signatur.
+      const paramsToSign: Record<string, string> = {
+        asset_folder: assetFolder,
+        public_id: publicId,
+        timestamp: String(timestamp),
+      };
+
+      const signature = await cloudinarySignature(paramsToSign, apiSecret);
+
+      // Rueckgabe: nur was der Browser fuer den Direktupload braucht.
+      // KEIN Secret.
+      return jsonOut({
+        success: true,
+        data: {
+          cloudName: cloudName,
+          apiKey: apiKey,
+          timestamp: timestamp,
+          signature: signature,
+          publicId: publicId,
+          assetFolder: assetFolder,
+          resourceType: "image", // Hinweis fuer den Upload-Endpunkt (nicht signiert)
+          uploadId: nonce,        // fuer eine spaetere 2b-Pruefung
+        },
+      });
     }
 
     return jsonOut({
